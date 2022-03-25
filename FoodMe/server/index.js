@@ -1,4 +1,9 @@
+var newrelic = require('newrelic');
+
 var express = require('express');
+var morgan = require('morgan');
+var bodyParser = require('body-parser');
+
 var fs = require('fs');
 var open = require('open');
 
@@ -26,9 +31,14 @@ exports.start = function(PORT, STATIC_DIR, DATA_FILE, TEST_DIR) {
   var app = express();
   var storage = new MemoryStorage();
 
+  // log requests
+  app.use(morgan('combined'));
+
   // serve static files for demo client
   app.use(express.static(STATIC_DIR));
 
+  // create application/json parser
+  var jsonParser = bodyParser.json()
 
   // API
   app.get(API_URL, function(req, res, next) {
@@ -48,8 +58,21 @@ exports.start = function(PORT, STATIC_DIR, DATA_FILE, TEST_DIR) {
     return res.status(400).send({error: errors});
   });
 
-  app.post(API_URL_ORDER, function(req, res, next) {
+  app.post(API_URL_ORDER, jsonParser, function(req, res, next) {
     console.log(req.body)
+    var order = req.body;
+    var itemCount = 0;
+    var orderTotal = 0;
+    order.items.forEach(function(item) {
+      itemCount += item.qty;
+      orderTotal += item.price * item.qty;
+    });
+    newrelic.addCustomAttributes({
+      'customer': order.deliverTo.name,
+      'restaurant': order.restaurant.name,
+      'itemCount': itemCount,
+      'orderTotal': orderTotal
+    });
     return res.status(201).send({ orderId: Date.now()});
   });
 
@@ -106,7 +129,7 @@ exports.start = function(PORT, STATIC_DIR, DATA_FILE, TEST_DIR) {
 
     app.listen(PORT, function() {
       open('http://localhost:' + PORT + '/');
-      // console.log('Go to http://localhost:' + PORT + '/');
+      console.log('Go to http://localhost:' + PORT + '/');
     });
   });
 
